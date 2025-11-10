@@ -13,7 +13,7 @@ os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 
 # Helper: Validate Excel Data
-def validate_excel_data(df: pd.DataFrame, required_columns: list, numeric_columns: list):
+def validate_excel_data(df: pd.DataFrame, numeric_columns: list):
     errors = []
     error_rows = []
 
@@ -38,7 +38,7 @@ def validate_excel_data(df: pd.DataFrame, required_columns: list, numeric_column
     return clean_df, error_df
 
 
-#Main Upload Processor
+# Main Upload Processor
 async def process_excel_upload(file, db: Session, user, base_url: str):
     uploaded_by = user.id
 
@@ -58,6 +58,7 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
 
+        # Map Excel columns to DB fields
         column_mapping = {e.value: e.name for e in ExcelColumnMap}
         df.rename(columns=column_mapping, inplace=True)
 
@@ -66,20 +67,41 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
         if missing:
             raise HTTPException(status_code=400, detail=f"Missing columns in Excel: {missing}")
 
+        # Replace NaN with 0 for numeric columns
         df = df.where(pd.notnull(df), 0)
 
-        numeric_columns = [
+        # Define column groups
+        int_columns = [
             "shift_a_days", "shift_b_days", "shift_c_days",
             "prime_days", "total_days", "billable_days",
             "non_billable_days", "diff", "final_total_days"
         ]
 
-        clean_df, error_df = validate_excel_data(df, required_columns, numeric_columns)
+        decimal_columns = [
+            "shift_a_allowance", "shift_b_allowance", "shift_c_allowance",
+            "prime_allowance", "total_days_allowance"
+        ]
 
-        # Always insert valid rows (if any)
+        numeric_columns = int_columns + decimal_columns
+
+        # Validate and clean
+        clean_df, error_df = validate_excel_data(df, numeric_columns)
+
         inserted_count = 0
         if not clean_df.empty:
-            clean_df = clean_df.astype({col: "int64" for col in numeric_columns})
+            clean_df[int_columns] = (
+                clean_df[int_columns]
+                .apply(pd.to_numeric, errors="coerce")
+                .round(0)
+                .astype("Int64")  # Nullable integer type
+            )
+            clean_df[decimal_columns] = (
+                clean_df[decimal_columns]
+                .apply(pd.to_numeric, errors="coerce")
+                .round(2)
+            )
+
+            # Insert valid records
             shift_records = [
                 ShiftAllowances(file_id=uploaded_file.id, **row)
                 for row in clean_df[required_columns].to_dict(orient="records")
@@ -88,7 +110,7 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
             db.commit()
             inserted_count = len(shift_records)
 
-        # If invalid rows exist, generate downloadable Excel
+        # Generate error Excel if invalid rows exist
         if error_df is not None and not error_df.empty:
             error_filename = f"error_{uuid.uuid4().hex}.xlsx"
             error_path = os.path.join(TEMP_FOLDER, error_filename)
