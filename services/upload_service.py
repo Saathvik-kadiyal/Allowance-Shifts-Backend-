@@ -5,7 +5,7 @@ import pandas as pd
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from models.models import UploadedFiles, ShiftAllowances
-from models.enums import ExcelColumnMap
+from utils.enums import ExcelColumnMap
 
 # Folder for saving generated error Excels
 TEMP_FOLDER = "media/error_excels"
