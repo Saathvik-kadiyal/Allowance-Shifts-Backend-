@@ -1,5 +1,5 @@
 from pydantic import BaseModel, condecimal
-from typing import Optional, Annotated
+from typing import Optional, Annotated,List
 from datetime import datetime
 
 DecimalType = Annotated[Optional[condecimal(max_digits=10, decimal_places=2)], None]
@@ -53,5 +53,12 @@ class EmployeeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    class Config:
+        from_attributes = True
+
+
+class PaginatedShiftResponse(BaseModel):
+    total_records: int
+    data: List[ShiftAllowancesResponse]
     class Config:
         from_attributes = True
