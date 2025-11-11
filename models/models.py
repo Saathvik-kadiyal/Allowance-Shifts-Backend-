@@ -31,7 +31,7 @@ class UploadedFiles(Base):
     uploaded_at = Column(TIMESTAMP, server_default=func.now())
     record_count = Column(Integer, default=0)
     status = Column(String(20), default="processed")  # processing, processed, failed
-    payroll_month = Column(String(7), nullable=False)  # MM-YYYY format
+    payroll_month = Column(String(7), nullable=False) 
 
     uploader = relationship("Users", back_populates="uploaded_files")
 
@@ -54,8 +54,8 @@ class ShiftAllowances(Base):
     delivery_manager = Column(String(100))
 
     month_year = Column(String(7),nullable=False,default=lambda: datetime.now().strftime("%m-%Y"))
-    duration_month = Column(String(7))               # MM-YYYY format
-    payroll_month = Column(String(7))                # MM-YYYY format
+    duration_month = Column(String(7))               
+    payroll_month = Column(String(7))                
 
     shift_a_days = Column(Integer, default=0)
     shift_b_days = Column(Integer, default=0)
@@ -83,6 +83,6 @@ class Allowance(Base):
     id = Column(Integer, primary_key=True, index=True)
     shift = Column(String(50), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
-    payroll_month = Column(String(7), nullable=False)  # MM-YYYY format
+    payroll_month = Column(String(7), nullable=False)  
 
     created_at = Column(TIMESTAMP, server_default=func.now())

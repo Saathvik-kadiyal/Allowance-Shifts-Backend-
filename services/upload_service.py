@@ -46,12 +46,12 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
     if not file.filename.endswith((".xls", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only Excel files are allowed")
 
-    # Pre-create upload entry
+
     uploaded_file = UploadedFiles(
         filename=file.filename,
         uploaded_by=uploaded_by,
         status="processing",
-        payroll_month="unknown",  # temporary until we parse Excel
+        payroll_month="unknown",  
     )
     db.add(uploaded_file)
     db.commit()
@@ -61,7 +61,7 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
 
-        # Map Excel columns to DB field names
+        
         column_mapping = {e.value: e.name for e in ExcelColumnMap}
         df.rename(columns=column_mapping, inplace=True)
 
@@ -73,7 +73,7 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
         # Replace NaN with 0 for numeric columns
         df = df.where(pd.notnull(df), 0)
 
-        # Numeric columns from your current schema
+        
         int_columns = ["shift_a_days", "shift_b_days", "shift_c_days", "prime_days", "total_days"]
         numeric_columns = int_columns
 
@@ -98,10 +98,10 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
             )
             uploaded_file.payroll_month = payroll_str
 
-            # Prepare rows for insertion
+            
             records = clean_df[required_columns].to_dict(orient="records")
 
-            # Add auto month_year (model also sets default, this is explicit)
+            
             for row in records:
                 if not row.get("month_year"):
                     row["month_year"] = datetime.now().strftime("%m-%Y")
@@ -112,7 +112,7 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
             db.commit()
             inserted_count = len(shift_records)
 
-        # Handle errors if invalid rows
+       
         if error_df is not None and not error_df.empty:
             error_filename = f"error_{uuid.uuid4().hex}.xlsx"
             error_path = os.path.join(TEMP_FOLDER, error_filename)
