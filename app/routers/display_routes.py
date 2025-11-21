@@ -17,7 +17,7 @@ def get_all_data(
 ):
     total_records = db.query(ShiftAllowances).count()
     # Fetch data with pagination
-    data = db.query(ShiftAllowances).offset(start).limit(limit).all()
+    data = db.query(ShiftAllowances).order_by(ShiftAllowances.id.asc()).offset(start).limit(limit).all()
 
     if not data:
         raise HTTPException(status_code=404, detail="No data found for the given range")
