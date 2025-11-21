@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from models.models import UploadedFiles, ShiftAllowances, ShiftMapping
 from utils.enums import ExcelColumnMap
+from sqlalchemy.exc import IntegrityError
 
 TEMP_FOLDER = "media/error_excels"
 os.makedirs(TEMP_FOLDER, exist_ok=True)
@@ -199,4 +200,11 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
         db.rollback()
         uploaded_file.status = "failed"
         db.commit()
-        raise HTTPException(status_code=500, detail=f"Processing failed: {error}")
+        if "duplicate key value violates unique constraint" in str(error):
+            raise HTTPException(
+                status_code=400,
+                detail="Duplicate data found: This record already exists for the same employee and payroll month."
+            )
+
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(error)}")
+

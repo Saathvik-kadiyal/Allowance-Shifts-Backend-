@@ -1,27 +1,52 @@
 from fastapi import APIRouter, Depends, HTTPException, Query,Body
 from sqlalchemy.orm import Session
 from db import get_db
-from models.models import ShiftAllowances
+from models.models import ShiftAllowances,ShiftMapping
 from utils.dependencies import get_current_user
 from schemas.displayschema import PaginatedShiftResponse,EmployeeResponse,PartialUpdateShiftRequest,PartialUpdateShiftResponse
 from services.display_service import partial_update_shift
+from sqlalchemy import func
 
 router = APIRouter(prefix="/display")
 
-@router.get("/",response_model=PaginatedShiftResponse)
+@router.get("/", response_model=PaginatedShiftResponse)
 def get_all_data(
-    start: int = Query(0, ge=0, description="Starting row index"),
-    limit: int = Query(10, gt=0, description="Number of records to fetch"),
+    start: int = Query(0, ge=0),
+    limit: int = Query(10, gt=0),
     db: Session = Depends(get_db),
-    current_user= Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ):
-    total_records = db.query(ShiftAllowances).count()
-    # Fetch data with pagination
-    data = db.query(ShiftAllowances).order_by(ShiftAllowances.id.asc()).offset(start).limit(limit).all()
-
+    query = (
+        db.query(
+            ShiftAllowances.id.label("id"),
+            ShiftAllowances.emp_id.label("emp_id"),
+            ShiftAllowances.emp_name.label("emp_name"),
+            ShiftAllowances.department.label("department"),
+            ShiftAllowances.payroll_month.label("month"),
+            ShiftAllowances.client.label("client"),
+            ShiftAllowances.project_code.label("project_code"),
+            func.array_agg(ShiftMapping.shift_type).label("shift_category")
+        )
+        .outerjoin(ShiftMapping, ShiftAllowances.id == ShiftMapping.shiftallowance_id)
+        .group_by(ShiftAllowances.id)
+    )
+ 
+    total_records = query.count()
+ 
+    data = (
+        query.order_by(ShiftAllowances.id.asc())
+        .offset(start)
+        .limit(limit)
+        .all()
+    )
+ 
     if not data:
-        raise HTTPException(status_code=404, detail="No data found for the given range")
-    return {"total_records": total_records, "data": data}
+        raise HTTPException(status_code=404, detail="No data found for given range")
+ 
+    return {
+        "total_records": total_records,
+        "data": data
+    }
 
 @router.get("/{id}",response_model=EmployeeResponse)
 def get_detail_page(id:int, 

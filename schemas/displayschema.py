@@ -7,13 +7,12 @@ class ShiftAllowancesResponse(BaseModel):
     id: int
     emp_id: str
     emp_name: str
-    grade: str
     department: str
+    month: date
     client: str
-    project: str
     project_code: Optional[str]
-    account_manager: Optional[str]
-
+    shift_category: List[str]
+ 
     class Config:
         from_attributes = True
 
