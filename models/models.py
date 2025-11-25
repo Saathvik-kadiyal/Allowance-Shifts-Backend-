@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Text, TIMESTAMP, Numeric, func, ForeignKey,UniqueConstraint,Date
+    Column, Integer, String, Text, TIMESTAMP, Numeric, func, ForeignKey,UniqueConstraint,Date,CheckConstraint
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -88,6 +88,12 @@ class ShiftMapping(Base):
     id = Column(Integer, primary_key=True, index=True)
     shiftallowance_id = Column(Integer, ForeignKey("shift_allowances.id", ondelete="CASCADE"))
     shift_type = Column(String(50), nullable=False)
-    days = Column(Integer, default=0)
+    # Two-decimal numeric
+    days = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # Optional: ensure days is non-negative
+    __table_args__ = (
+        CheckConstraint('days >= 0', name='chk_days_non_negative'),
+    )
 
     shift_allowance = relationship("ShiftAllowances", back_populates="shift_mappings")

@@ -43,13 +43,16 @@ def validate_excel_data(df: pd.DataFrame):
     for idx, row in df.iterrows():
         row_errors = []
 
-        # Validate shift days
+        # UPDATED: decimal-safe numeric validation
         for col in ["shift_a_days", "shift_b_days", "shift_c_days", "prime_days"]:
             value = row[col]
             try:
-                df.at[idx, col] = pd.to_numeric(value)
+                if value is None or str(value).strip() == "":
+                    df.at[idx, col] = 0.0
+                else:
+                    df.at[idx, col] = float(value)
             except Exception:
-                row_errors.append(f"Invalid value in '{col}' → '{value}'")
+                row_errors.append(f"Invalid numeric value in '{col}' → '{value}'")
 
         # Validate month format
         for month_col in ["duration_month", "payroll_month"]:
@@ -101,7 +104,7 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
         if missing:
             raise HTTPException(status_code=400, detail=f"Missing columns: {missing}")
 
-        # Replace NaN
+        # Replace NaN with 0 for avoid type crash
         df = df.where(pd.notnull(df), 0)
 
         clean_df, error_df = validate_excel_data(df)
@@ -118,7 +121,7 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
 
         inserted_count = 0
 
-        # Allowed fields for ShiftAllowances (derived from Enum)
+        # Fields
         shift_fields = {"shift_a_days", "shift_b_days", "shift_c_days", "prime_days"}
         allowed_fields = {
             "emp_id", "emp_name", "grade", "department",
@@ -131,20 +134,15 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
 
         for row in clean_df.to_dict(orient="records"):
 
-            # Separate shift fields
-            shift_data = {k: int(row.get(k, 0)) for k in shift_fields}
+            # UPDATED: store decimals as float (not int)
+            shift_data = {k: float(row.get(k, 0)) for k in shift_fields}
 
-            # Build ShiftAllowances row with only allowed fields
-            sa_payload = {
-                k: row[k] for k in allowed_fields if k in row
-            }
-
+            sa_payload = {k: row[k] for k in allowed_fields if k in row}
 
             sa = ShiftAllowances(**sa_payload)
             db.add(sa)
             db.flush()
 
-            # Insert shift mappings
             mapping_pairs = [
                 ("A", shift_data["shift_a_days"]),
                 ("B", shift_data["shift_b_days"]),
@@ -157,14 +155,14 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
                     db.add(ShiftMapping(
                         shiftallowance_id=sa.id,
                         shift_type=shift_type,
-                        days=days
+                        days=days  # decimal preserved
                     ))
 
             inserted_count += 1
 
         db.commit()
 
-        # Handle error rows
+        # Error rows handling
         if error_df is not None and not error_df.empty:
             error_file = f"error_{uuid.uuid4().hex}.xlsx"
             path = os.path.join(TEMP_FOLDER, error_file)
@@ -207,4 +205,3 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
             )
 
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(error)}")
-
