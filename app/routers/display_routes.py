@@ -18,23 +18,24 @@ def get_all_data(
 ):
     query = (
         db.query(
-            ShiftAllowances.id.label("id"),
             ShiftAllowances.emp_id.label("emp_id"),
-            ShiftAllowances.emp_name.label("emp_name"),
-            ShiftAllowances.department.label("department"),
-            ShiftAllowances.payroll_month.label("month"),
-            ShiftAllowances.client.label("client"),
-            ShiftAllowances.project_code.label("project_code"),
+            func.min(ShiftAllowances.id).label("id"),
+            func.min(ShiftAllowances.emp_name).label("emp_name"),
+            func.min(ShiftAllowances.department).label("department"),
+            func.min(ShiftAllowances.payroll_month).label("month"),
+            func.min(ShiftAllowances.client).label("client"),
+            func.min(ShiftAllowances.project_code).label("project_code"),
+            func.min(ShiftAllowances.account_manager).label("account_manager"),
             func.array_agg(ShiftMapping.shift_type).label("shift_category")
         )
         .outerjoin(ShiftMapping, ShiftAllowances.id == ShiftMapping.shiftallowance_id)
-        .group_by(ShiftAllowances.id)
+        .group_by(ShiftAllowances.emp_id)
     )
  
     total_records = query.count()
  
     data = (
-        query.order_by(ShiftAllowances.id.asc())
+        query.order_by(func.min(ShiftAllowances.id).asc())
         .offset(start)
         .limit(limit)
         .all()

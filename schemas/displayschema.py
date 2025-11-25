@@ -11,6 +11,7 @@ class ShiftAllowancesResponse(BaseModel):
     month: date
     client: str
     project_code: Optional[str]
+    account_manager: str
     shift_category: List[str]
  
     class Config:

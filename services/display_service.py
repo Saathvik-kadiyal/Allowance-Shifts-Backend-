@@ -72,6 +72,7 @@ def update_shift_service(db: Session, record_id: int, updates: dict):
         "shift_details": shift_details
     }
 
+
 def display_emp_details(emp_id: str, db: Session):
     data = (
         db.query(ShiftAllowances)
@@ -100,11 +101,22 @@ def display_emp_details(emp_id: str, db: Session):
         month_obj = {
             "id": row.id,
             "payroll_month": payroll_month_str,
-            "client": row.client,
+            "grade": row.grade,
             "department": row.department,
+            "client": row.client,
             "project": row.project,
             "project_code": row.project_code,
             "account_manager": row.account_manager,
+            "practice_lead": row.practice_lead,
+            "delivery_manager": row.delivery_manager,
+            "duration_month": row.duration_month,
+            "billability_status": row.billability_status,
+            "practice_remarks": row.practice_remarks,
+            "rmg_comments": row.rmg_comments,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+
+            # shift days
             "A": 0,
             "B": 0,
             "C": 0,
