@@ -86,5 +86,15 @@ def get_client_shift_summary(db: Session, payroll_month: str):
         }
         for client, info in summary.items()
     ]
- 
+    grand = {
+        "client": "TOTAL",
+        "total_employees": sum(len(info["employees"]) for info in summary.values()),
+        "shift_a_days": float(sum(info["shift_a"] for info in summary.values())),
+        "shift_b_days": float(sum(info["shift_b"] for info in summary.values())),
+        "shift_c_days": float(sum(info["shift_c"] for info in summary.values())),
+        "prime_days": float(sum(info["prime"] for info in summary.values())),
+        "total_allowances": float(sum(info["total_allowances"] for info in summary.values()))
+    }
+
+    result.append(grand)
     return result
