@@ -35,7 +35,18 @@ def export_filtered_excel(
             status_code=400,
             detail="start_month must be less than or equal to end_month"
         )
+    current_month = datetime.now().strftime("%Y-%m")
+    if start_month and start_month > current_month:
+        raise HTTPException(
+            status_code=400,
+            detail=f"start_month '{start_month}' cannot be greater than current month {current_month}"
+        )
 
+    if end_month and end_month > current_month:
+        raise HTTPException(
+            status_code=400,
+            detail=f"end_month '{end_month}' cannot be greater than current month {current_month}"
+        )
     # base query
     query = (
         db.query(
