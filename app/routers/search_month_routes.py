@@ -13,5 +13,5 @@ def get_search_by_monthly(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    df = search_shift_by_month_range(db, start_month, end_month)
-    return df.to_dict(orient="records")
+    data = search_shift_by_month_range(db, start_month, end_month)
+    return data
