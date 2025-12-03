@@ -338,7 +338,10 @@ def get_client_total_allowances(db: Session, start_month: str | None, end_month:
                 summary[client] += days * rates.get(stype, Decimal(0))
 
     if not summary:
-        return [{"message": "No data found for the selected month(s)"}]
+        raise HTTPException(
+            status_code=404,
+            detail="No shift allowance data found for the selected month(s)"
+        )
 
     result = sorted(
         [{"client": c, "total_allowances": float(v)} for c, v in summary.items()],
