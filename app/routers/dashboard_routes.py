@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends,Query
 from sqlalchemy.orm import Session
-from schemas.dashboardschema import VerticalGraphResponse, PieChartClientShift
+from schemas.dashboardschema import VerticalGraphResponse, PieChartClientShift,VerticalBarResponse
 from db import get_db
 from utils.dependencies import get_current_user
 from services.dashboard_service import (
@@ -10,7 +10,7 @@ from services.dashboard_service import (
     get_vertical_bar_service,
     get_piechart_shift_summary
 )
-from typing import List
+from typing import List,Optional
 
 router = APIRouter(prefix="/dashboard")
 
@@ -60,18 +60,12 @@ def piechart(
     )
 
 
-@router.get("/vertical-bar", response_model=List[dict])
+@router.get("/vertical-bar", response_model=List[VerticalGraphResponse])
 def vertical_bar(
     start_month: str | None = None,
     end_month: str | None = None,
-    top: int | None = None,
+    top: str | None = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    return get_vertical_bar_service(
-        db=db,
-        start_month=start_month,
-        end_month=end_month,
-        top=top
-    )
-
+    return get_vertical_bar_service(db=db, start_month=start_month, end_month=end_month, top=top)
