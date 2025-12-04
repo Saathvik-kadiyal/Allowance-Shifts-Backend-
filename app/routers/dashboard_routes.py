@@ -28,10 +28,13 @@ def horizontal_bar(
 @router.get("/graph")
 def graph(
     client_name: str,
+    start_month: str | None = None,
+    end_month: str | None = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    return get_graph_service(db, client_name)
+    return get_graph_service(db, client_name, start_month, end_month)
+
 
 
 @router.get("/clients")

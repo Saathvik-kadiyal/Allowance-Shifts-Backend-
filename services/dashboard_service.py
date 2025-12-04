@@ -85,33 +85,103 @@ def get_horizontal_bar_service(db: Session, start_month: str | None, end_month: 
     return {"horizontal_bar": result}
 
 
-
-def get_graph_service(db: Session, client_name: str):
-
+def get_graph_service(
+    db: Session,
+    client_name: str,
+    start_month: str | None = None,
+    end_month: str | None = None
+):
     if not client_name:
         raise HTTPException(status_code=400, detail="client_name is required")
 
-    current_year = datetime.now().year
+    if not client_name.replace(" ", "").isalpha():
+        raise HTTPException(
+            status_code=400,
+            detail="Client name must contain letters only (no numbers allowed)"
+        )
+
+    client_exists = (
+        db.query(ShiftAllowances)
+        .filter(ShiftAllowances.client == client_name)
+        .first()
+    )
+    if not client_exists:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Client '{client_name}' not found in database"
+        )
+
+
+    def validate_month(m: str):
+        try:
+            datetime.strptime(m, "%Y-%m")
+            return True
+        except:
+            return False
+
+    def generate_months(start_m: str, end_m: str):
+        result = []
+        cur = datetime.strptime(start_m, "%Y-%m")
+        end = datetime.strptime(end_m, "%Y-%m")
+        while cur <= end:
+            result.append(cur)
+            cur += relativedelta(months=1)
+        return result
+
+    if end_month and not start_month:
+        raise HTTPException(
+            status_code=400,
+            detail="start_month is required when end_month is provided"
+        )
+
+    if not start_month and not end_month:
+        current_year = datetime.now().year
+        months = [datetime(current_year, m, 1) for m in range(1, 13)]
+    else:
+        if not validate_month(start_month):
+            raise HTTPException(status_code=400, detail="start_month must be YYYY-MM format")
+
+        if end_month and not validate_month(end_month):
+            raise HTTPException(status_code=400, detail="end_month must be YYYY-MM format")
+
+        if end_month and end_month < start_month:
+            raise HTTPException(status_code=400, detail="end_month must be >= start_month")
+
+        if not end_month:
+            months = [datetime.strptime(start_month, "%Y-%m")]
+        else:
+            months = generate_months(start_month, end_month)
+
+    years = {m.year for m in months}
+    rate_map = {}
+
+    for yr in years:
+        rows = db.query(ShiftsAmount).filter(
+            ShiftsAmount.payroll_year == str(yr)
+        ).all()
+        rate_map[yr] = {
+            r.shift_type.strip().upper(): Decimal(str(r.amount)) for r in rows
+        }
+
     monthly_allowances = {}
 
-    # Fetch shift rate table once
-    rate_rows = db.query(ShiftsAmount).filter(ShiftsAmount.payroll_year == str(current_year)).all()
-    rates = {r.shift_type.strip().upper(): Decimal(str(r.amount)) for r in rate_rows}
+    for m in months:
+        month_num = m.month
+        year_num = m.year
+        month_name = m.strftime("%b")
 
-    for month in range(1, 13):
         records = db.query(ShiftAllowances).filter(
             ShiftAllowances.client == client_name,
-            extract("year", ShiftAllowances.duration_month) == current_year,
-            extract("month", ShiftAllowances.duration_month) == month
+            extract("year", ShiftAllowances.duration_month) == year_num,
+            extract("month", ShiftAllowances.duration_month) == month_num
         ).all()
 
-        month_key = datetime(1900, month, 1).strftime("%b")
-
         if not records:
-            monthly_allowances[month_key] = 0.0
+            monthly_allowances[month_name] = 0.0
             continue
 
         total_amount = Decimal(0)
+        rates = rate_map[year_num]
 
         for row in records:
             for mapping in row.shift_mappings:
@@ -120,10 +190,9 @@ def get_graph_service(db: Session, client_name: str):
                 rate = rates.get(stype, Decimal(0))
                 total_amount += days * rate
 
-        monthly_allowances[month_key] = float(total_amount)
+        monthly_allowances[month_name] = float(total_amount)
 
     return {"graph": monthly_allowances}
-
 
 
 def get_all_clients_service(db: Session):
