@@ -17,9 +17,10 @@ def export_filtered_excel(
     emp_id: str | None = None,
     account_manager: str | None = None,
     start_month: str | None = None,
-    end_month: str | None = None
+    end_month: str | None = None,
+    start: int = 0,
+    limit: int = 10,
 ):
-    # ===== VALIDATIONS =====
     if end_month and not start_month:
         raise HTTPException(status_code=400, detail="start_month is required when end_month is provided")
 
@@ -30,27 +31,7 @@ def export_filtered_excel(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Month format must be YYYY-MM")
 
-    if start_month and end_month and start_month > end_month:
-        raise HTTPException(
-            status_code=400,
-            detail="start_month must be less than or equal to end_month"
-        )
-
-    current_month = datetime.now().strftime("%Y-%m")
-    if start_month and start_month > current_month:
-        raise HTTPException(
-            status_code=400,
-            detail=f"start_month '{start_month}' cannot be greater than current month {current_month}"
-        )
-
-    if end_month and end_month > current_month:
-        raise HTTPException(
-            status_code=400,
-            detail=f"end_month '{end_month}' cannot be greater than current month {current_month}"
-        )
-
-    # base query
-    query = (
+    base_query = (
         db.query(
             ShiftAllowances.id,
             ShiftAllowances.emp_id,
@@ -65,49 +46,58 @@ def export_filtered_excel(
         )
     )
 
-    # month filters
+    # MONTH FILTERS
     if start_month and end_month:
-        query = query.filter(
+        base_query = base_query.filter(
             func.to_char(ShiftAllowances.duration_month, "YYYY-MM") >= start_month,
             func.to_char(ShiftAllowances.duration_month, "YYYY-MM") <= end_month
         )
     elif start_month:
-        query = query.filter(
+        base_query = base_query.filter(
             func.to_char(ShiftAllowances.duration_month, "YYYY-MM") == start_month
         )
+    # else → No month filter → return full DB based on other search params
 
-    # emp filters
+    # EMP / ACCOUNT MANAGER FILTERS
     if emp_id:
-        query = query.filter(func.upper(ShiftAllowances.emp_id).like(f"%{emp_id.upper()}%"))
+        base_query = base_query.filter(func.upper(ShiftAllowances.emp_id).like(f"%{emp_id.upper()}%"))
 
     if account_manager:
-        query = query.filter(func.upper(ShiftAllowances.account_manager).like(f"%{account_manager.upper()}%"))
+        base_query = base_query.filter(func.upper(ShiftAllowances.account_manager).like(f"%{account_manager.upper()}%"))
 
-    rows = query.order_by(ShiftAllowances.duration_month, ShiftAllowances.emp_id).all()
+    # PAGINATION
+    total_records = base_query.count()
+    rows = base_query.order_by(
+        ShiftAllowances.duration_month.desc(),
+        ShiftAllowances.emp_id.asc()
+    ).offset(start).limit(limit).all()
 
     if not rows:
         raise HTTPException(status_code=404, detail="No data found based on filters")
 
-    final_data = []
-    for row in rows:
-        base = row._asdict()
-        shiftallowance_id = base.pop("id")
+    result = []
+    SHIFT_LABELS = {
+        "A": "A(9PM to 6AM)",
+        "B": "B(4PM to 1AM)",
+        "C": "C(6AM to 3PM)",
+        "PRIME": "PRIME(12AM to 9AM)"
+    }
 
-        mappings = (
-            db.query(ShiftMapping.shift_type, ShiftMapping.days)
-            .filter(ShiftMapping.shiftallowance_id == shiftallowance_id)
-            .all()
-        )
+    for row in rows:
+        row_dict = row._asdict()
+        shiftallowance_id = row_dict.pop("id")
+
+        mappings = db.query(ShiftMapping.shift_type, ShiftMapping.days).filter(
+            ShiftMapping.shiftallowance_id == shiftallowance_id
+        ).all()
 
         shift_output = {}
         for m in mappings:
-            if m.days and float(m.days) > 0:
-                label = SHIFT_LABELS.get(m.shift_type, m.shift_type)
-                shift_output[label] = float(m.days)
+            days = float(m.days)
+            if days > 0:
+                shift_output[SHIFT_LABELS.get(m.shift_type, m.shift_type)] = days
 
-        final_data.append({
-            **base,
-            "shift_details": shift_output      
-        })
+        row_dict["shift_details"] = shift_output
+        result.append(row_dict)
 
-    return jsonable_encoder(final_data)
+    return total_records, result

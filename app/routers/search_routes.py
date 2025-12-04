@@ -10,10 +10,18 @@ router = APIRouter(prefix="/employee-details", tags=["Search Details"])
 def fetch_employee_details(
     emp_id: str | None = Query(None),
     account_manager: str | None = Query(None),
-    start_month: str | None = Query(None, description="YYYY-MM"),
-    end_month: str | None = Query(None, description="YYYY-MM"),
+    start_month: str | None = Query(None),
+    end_month: str | None = Query(None),
+    start: int = Query(0, ge=0),
+    limit: int = Query(10, gt=0),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    data = get_employee_details(db, emp_id, account_manager, start_month, end_month)
-    return data
+    total_records, data = get_employee_details(
+        db, emp_id, account_manager, start_month, end_month, start, limit
+    )
+
+    return {
+        "total_records": total_records,
+        "data": data
+    }
