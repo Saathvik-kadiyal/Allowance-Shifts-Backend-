@@ -127,7 +127,7 @@ def export_filtered_excel(
             "rmg_comments": row.rmg_comments,
             "duration_month": row.duration_month.strftime("%Y-%m") if row.duration_month else None,
             "payroll_month": row.payroll_month.strftime("%Y-%m") if row.payroll_month else None,
-            "total_allowances": f'₹{total_allowances}'
+            "total_allowances": f'₹{total_allowances:.2f}'
         })
 
     return pd.DataFrame(final_data)
