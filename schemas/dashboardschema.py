@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel,Field,field_validator
+from typing import List,Optional, Literal,Union,Dict
 
 
 class PieChartClientShift(BaseModel):
@@ -37,3 +37,35 @@ class VerticalGraphResponse(BaseModel):
 class ClientList(BaseModel):
     clients: List[str]
 
+
+
+class DashboardFilterRequest(BaseModel):
+    
+    clients: Union[
+        Literal["ALL"],
+        Dict[str, List[str]]
+    ]
+
+   
+    top: str = Field(
+        default="ALL",
+        description="ALL or a numeric string like '2', '5', '10'"
+    )
+
+    start_month: Optional[str] = None
+    end_month: Optional[str] = None
+
+    year: Optional[int] = None
+    months: Optional[List[Literal[
+        "January","February","March","April","May","June",
+        "July","August","September","October","November","December"
+    ]]] = None
+    quarters: Optional[List[Literal["Q1","Q2","Q3","Q4"]]] = None
+
+    @field_validator("top")
+    def validate_top(cls, v):
+        if v == "ALL":
+            return v
+        if not v.isdigit() or int(v) <= 0:
+            raise ValueError("top must be 'ALL' or a positive number as string")
+        return v

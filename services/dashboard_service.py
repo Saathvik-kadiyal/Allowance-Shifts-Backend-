@@ -1,13 +1,15 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import extract
-from datetime import datetime
+from datetime import datetime,date
 from decimal import Decimal
 from fastapi import HTTPException
-from models.models import ShiftAllowances, ShiftsAmount
+from models.models import ShiftAllowances, ShiftsAmount, ShiftMapping
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func
+from sqlalchemy import func,extract,Integer,or_
 from typing import List
 from utils.client_enums import Company
+from collections import defaultdict
+from schemas.dashboardschema import DashboardFilterRequest
 
 
 def validate_month_format(month: str):
@@ -500,3 +502,162 @@ def get_vertical_bar_service(
         result = result[:top_int]
 
     return result
+
+MONTH_MAP = {
+    "January": 1, "February": 2, "March": 3, "April": 4,
+    "May": 5, "June": 6, "July": 7, "August": 8,
+    "September": 9, "October": 10, "November": 11, "December": 12
+}
+
+QUARTER_MAP = {
+    "Q1": [1, 2, 3],
+    "Q2": [4,5,6],
+    "Q3": [7,8,9],
+    "Q4": [10,11,12]
+}
+
+SHIFT_TYPES = ["A", "B", "C", "PRIME"]
+
+
+def get_client_dashboard_summary(db: Session, payload: DashboardFilterRequest):
+
+    # ---------- BASIC VALIDATIONS ----------
+    if payload.start_month and payload.year:
+        raise HTTPException(
+            status_code=400,
+            detail="Use either month range OR year-based filters, not both"
+        )
+
+    # ---------- DATE FILTER BUILD ----------
+    filters = []
+
+    if payload.start_month:
+        start = date.fromisoformat(payload.start_month + "-01")
+        if payload.end_month:
+            end = date.fromisoformat(payload.end_month + "-01")
+            filters.append(ShiftAllowances.duration_month.between(start, end))
+        else:
+            filters.append(ShiftAllowances.duration_month == start)
+
+    elif payload.year:
+        filters.append(extract("year", ShiftAllowances.duration_month) == payload.year)
+
+        if payload.months:
+            month_nums = [MONTH_MAP[m] for m in payload.months]
+            filters.append(extract("month", ShiftAllowances.duration_month).in_(month_nums))
+
+        if payload.quarters:
+            quarter_months = set()
+            for q in payload.quarters:
+                quarter_months.update(QUARTER_MAP[q])
+            filters.append(extract("month", ShiftAllowances.duration_month).in_(quarter_months))
+
+    # ---------- BASE QUERY ----------
+    q = (
+        db.query(
+            ShiftAllowances.emp_id,
+            ShiftAllowances.client,
+            ShiftAllowances.department,
+            ShiftMapping.shift_type,
+            ShiftMapping.days,
+            ShiftsAmount.amount
+        )
+        .join(ShiftMapping, ShiftMapping.shiftallowance_id == ShiftAllowances.id)
+        .join(
+            ShiftsAmount,
+            func.extract("year", ShiftAllowances.duration_month)
+            == func.cast(ShiftsAmount.payroll_year, Integer)
+        )
+        .filter(ShiftMapping.shift_type == ShiftsAmount.shift_type)
+    )
+
+    # ---------- CLIENT + DEPARTMENT FILTER ----------
+    if payload.clients != "ALL":
+        client_conditions = []
+
+        for client, depts in payload.clients.items():
+            if not depts:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Departments must be provided for client '{client}'"
+                )
+
+            client_conditions.append(
+                (ShiftAllowances.client == client) &
+                (ShiftAllowances.department.in_(depts))
+            )
+
+        q = q.filter(or_(*client_conditions))
+
+    if filters:
+        q = q.filter(*filters)
+
+    rows = q.all()
+
+    if not rows:
+        return {"dashboard": {}}
+
+    # ---------- AGGREGATION ----------
+    dashboard = {
+        "total_allowance": 0,
+        "head_count": set(),
+        **{f"shift_{s}": {"total": 0, "head_count": set()} for s in SHIFT_TYPES},
+        "clients": {}
+    }
+
+    for emp_id, client, dept, shift, days, amount in rows:
+        allowance = float(days) * float(amount)
+
+        dashboard["total_allowance"] += allowance
+        dashboard["head_count"].add(emp_id)
+        dashboard[f"shift_{shift}"]["total"] += allowance
+        dashboard[f"shift_{shift}"]["head_count"].add(emp_id)
+
+        client_data = dashboard["clients"].setdefault(client, {
+            "total_allowance": 0,
+            "head_count": set(),
+            **{f"shift_{s}": {"total": 0, "head_count": set()} for s in SHIFT_TYPES},
+            "department": {}
+        })
+
+        client_data["total_allowance"] += allowance
+        client_data["head_count"].add(emp_id)
+        client_data[f"shift_{shift}"]["total"] += allowance
+        client_data[f"shift_{shift}"]["head_count"].add(emp_id)
+
+        dept_data = client_data["department"].setdefault(dept, {
+            "total_allowance": 0,
+            "head_count": set(),
+            **{f"shift_{s}": {"total": 0, "head_count": set()} for s in SHIFT_TYPES},
+        })
+
+        dept_data["total_allowance"] += allowance
+        dept_data["head_count"].add(emp_id)
+        dept_data[f"shift_{shift}"]["total"] += allowance
+        dept_data[f"shift_{shift}"]["head_count"].add(emp_id)
+
+    # ---------- FINALIZE COUNTS ----------
+    def finalize(node):
+        node["head_count"] = len(node["head_count"])
+        for s in SHIFT_TYPES:
+            node[f"shift_{s}"]["head_count"] = len(node[f"shift_{s}"]["head_count"])
+
+    finalize(dashboard)
+
+    for c in dashboard["clients"].values():
+        finalize(c)
+        for d in c["department"].values():
+            finalize(d)
+
+    # ---------- TOP N ----------
+    if payload.top != "ALL":
+        top_n = int(payload.top)
+        dashboard["clients"] = dict(
+            sorted(
+                dashboard["clients"].items(),
+                key=lambda x: x[1]["total_allowance"],
+                reverse=True
+            )[:top_n]
+        )
+
+    return {"dashboard": dashboard}

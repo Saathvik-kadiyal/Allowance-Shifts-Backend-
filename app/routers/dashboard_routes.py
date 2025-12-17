@@ -8,7 +8,8 @@ from schemas.dashboardschema import (
     GraphResponse,
     VerticalGraphResponse,
     PieChartClientShift,
-    ClientList
+    ClientList,
+    DashboardFilterRequest
 )
 
 from services.dashboard_service import (
@@ -16,7 +17,8 @@ from services.dashboard_service import (
     get_graph_service,
     get_vertical_bar_service,
     get_piechart_shift_summary,
-    get_all_clients_service
+    get_all_clients_service,
+    get_client_dashboard_summary
 )
 
 
@@ -68,3 +70,10 @@ def get_vertical_bar(
 ):
     return get_vertical_bar_service(db, start_month, end_month, top)
 
+@router.post("/client-allowance-summary")
+def client_dashboard_summary(
+    payload: DashboardFilterRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    return get_client_dashboard_summary(db, payload)
