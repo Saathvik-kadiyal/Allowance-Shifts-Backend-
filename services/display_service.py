@@ -112,6 +112,14 @@ def fetch_shift_data(db: Session, start: int, limit: int):
 def parse_shift_value(value):
     if value is None or str(value).strip() == "":
         return 0.0
+    raw = str(value).strip()
+
+    if raw in ("-0", "-0.0", "-0.00"):
+        raise HTTPException(
+            status_code=400,
+            detail="Negative zero is not allowed"
+        )
+
     try:
         v = float(value)
     except Exception:

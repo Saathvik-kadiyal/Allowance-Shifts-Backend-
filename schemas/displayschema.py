@@ -118,100 +118,34 @@ class ClientDeptResponse(BaseModel):
 
 
 class CorrectedRow(BaseModel):
-
+ 
     emp_id: str
-    project: Optional[str] = None
-
+    project:str
     duration_month: Optional[str] = Field(
-        None,
-        description="YYYY-MM (used as filter)"
-    )
-
-   
+    None,
+    description="Format: Mon'YY (e.g. Jan'25)"
+)
+ 
     payroll_month: Optional[str] = Field(
-        None,
-        description="YYYY-MM (used for update)"
-    )
-
+    None,
+    description="Format: Mon'YY (e.g. Jan'25)"
+)
+ 
+ 
     shift_a_days: Optional[Union[int, float]] = 0
     shift_b_days: Optional[Union[int, float]] = 0
     shift_c_days: Optional[Union[int, float]] = 0
     prime_days: Optional[Union[int, float]] = 0
-
-    
-    emp_name: Optional[str] = None
-    grade: Optional[str] = None
-
-    current_status: Optional[str] = Field(
-        None, alias="Current Status(e)"
-    )
-
-    department: Optional[str] = None
-    client: Optional[str] = None
-    project_code: Optional[str] = None
-    account_manager: Optional[str] = None
-    practice_lead: Optional[str] = None
-    delivery_manager: Optional[Union[str, int]] = None
-
-    shift_types: Optional[int] = Field(
-        None, alias="# Shift Types(e)"
-    )
-
-    total_days: Optional[Union[int, float]] = None
-
-    timesheet_billable_days: Optional[int] = Field(
-        None, alias="Timesheet Billable Days"
-    )
-    timesheet_non_billable_days: Optional[int] = Field(
-        None, alias="Timesheet Non Billable Days"
-    )
-
-    diff: Optional[int] = Field(None, alias="Diff")
-    final_total_days: Optional[int] = Field(
-        None, alias="Final Total Days"
-    )
-
-    billability_status: Optional[str] = None
-    practice_remarks: Optional[Union[str, int]] = None
-    rmg_comments: Optional[str] = None
-
-    amar_approval: Optional[int] = Field(
-        None, alias="Amar Approval"
-    )
-
-    shift_a_allowances: Optional[Union[int, float]] = Field(
-        None, alias="Shift A Allowances"
-    )
-    shift_b_allowances: Optional[Union[int, float]] = Field(
-        None, alias="Shift B Allowances"
-    )
-    shift_c_allowances: Optional[Union[int, float]] = Field(
-        None, alias="Shift C Allowances"
-    )
-    prime_allowances: Optional[Union[int, float]] = Field(
-        None, alias="Prime Allowances"
-    )
-
-    total_day_allowances: Optional[Union[int, float]] = Field(
-        None, alias="TOTAL DAYS Allowances"
-    )
-
-    am_email_attempt: Optional[str] = Field(
-        None, alias="AM Email Attempt(e)"
-    )
-
-    am_approval_status: Optional[Union[str, int]] = Field(
-        None, alias="AM Approval Status(e)"
-    )
-
-   
+ 
     class Config:
-        allow_population_by_field_name = True
         extra = "ignore"
-
-
+ 
+ 
 class CorrectedRowsRequest(BaseModel):
     corrected_rows: List[CorrectedRow]
-
+ 
     class Config:
         extra = "ignore"
+ 
+ 
+ 

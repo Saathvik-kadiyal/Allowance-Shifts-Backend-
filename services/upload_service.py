@@ -274,18 +274,29 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
 
 
 def parse_yyyy_mm(value: str) -> date:
+    """
+    Parses month in Mon'YY format (e.g. Jan'25) and returns first day of month
+    """
     if not value:
         raise HTTPException(
             status_code=400,
-            detail="Month is required in YYYY-MM format"
+            detail="Month is required in Mon'YY format (e.g. Jan'25)"
+        )
+
+    value = value.strip()
+
+    if not re.match(r"^[A-Za-z]{3}'\d{2}$", value):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid month format. Expected Mon'YY (e.g. Jan'25)"
         )
 
     try:
-        return datetime.strptime(value, "%Y-%m").date().replace(day=1)
+        return datetime.strptime(value, "%b'%y").date().replace(day=1)
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail="Invalid month format. Expected YYYY-MM"
+            detail="Invalid month value"
         )
 
 
@@ -371,18 +382,15 @@ def update_corrected_rows(
 
     for row in corrected_rows:
         try:
-            
             if not row.emp_id or not row.duration_month or not row.project:
                 raise HTTPException(
                     status_code=400,
                     detail="emp_id, duration_month and project are required"
                 )
 
-            
             duration_month = parse_yyyy_mm(row.duration_month)
             payroll_month = parse_yyyy_mm(row.payroll_month)
 
-            
             validate_not_future_month(duration_month, "duration_month")
             validate_not_future_month(payroll_month, "payroll_month")
 
@@ -398,7 +406,6 @@ def update_corrected_rows(
                     detail="Payroll month cannot be earlier than duration month"
                 )
 
-         
             total_shift_days = validate_shift_days(row)
 
             duration_month_days = days_in_month(duration_month)
@@ -411,7 +418,6 @@ def update_corrected_rows(
                     )
                 )
 
-       
             sa = (
                 db.query(ShiftAllowances)
                 .filter(
@@ -476,7 +482,6 @@ def update_corrected_rows(
                 "reason": str(e),
             })
 
-    
     if failed_rows:
         raise HTTPException(
             status_code=400,
