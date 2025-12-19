@@ -533,6 +533,11 @@ def get_client_dashboard_summary(db: Session, payload: DashboardFilterRequest):
         start = date.fromisoformat(payload.start_month + "-01")
         if payload.end_month:
             end = date.fromisoformat(payload.end_month + "-01")
+            if payload.end_month and start > end:
+                raise HTTPException(
+                    status_code=400,
+                    detail="start_month must be less than or equal to end_month"
+                )
             filters.append(ShiftAllowances.duration_month.between(start, end))
         else:
             filters.append(ShiftAllowances.duration_month == start)
