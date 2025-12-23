@@ -1,22 +1,20 @@
+"""Services for validating, processing, and uploading shift allowance Excel files."""
+
 import os
 import uuid
 import io
-import pandas as pd
 import re
+import calendar
 from datetime import datetime, date
+from typing import List
+
+import pandas as pd
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from models.models import (
-    UploadedFiles,
-    ShiftAllowances,
-    ShiftMapping,
-    ShiftsAmount,
-)
-from utils.enums import ExcelColumnMap
 
+from models.models import UploadedFiles, ShiftAllowances, ShiftMapping, ShiftsAmount
 from schemas.displayschema import CorrectedRow
-from typing import List
-import calendar
+from utils.enums import ExcelColumnMap
 
 
 TEMP_FOLDER = "media/error_excels"
@@ -29,6 +27,7 @@ MONTH_MAP = {
 }
 
 def make_json_safe(obj):
+    """Convert dates and nested objects into JSON-safe values."""
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
     if isinstance(obj, dict):
@@ -39,6 +38,7 @@ def make_json_safe(obj):
 
 
 def parse_month_format(value: str):
+    """Parse month in Mon'YY format and return a date."""
     if not isinstance(value, str):
         return None
     try:
@@ -167,7 +167,8 @@ def normalize_error_rows(error_rows):
 
     return normalized
 
-async def process_excel_upload(file, db: Session, user, base_url: str):
+async def process_excel_upload(file, db: Session, user, _base_url: str):
+    """Process uploaded Excel file and persist valid shift records."""
 
     if not file.filename.endswith((".xls", ".xlsx")):
         raise HTTPException(status_code=400, detail="Only Excel files allowed")
@@ -184,10 +185,10 @@ async def process_excel_upload(file, db: Session, user, base_url: str):
     try:
         df = pd.read_excel(io.BytesIO(await file.read()))
 
-       
+
         validate_required_excel_columns(df)
 
-       
+
         df.rename(columns={e.value: e.name for e in ExcelColumnMap}, inplace=True)
         df = df.where(pd.notnull(df), 0)
 
