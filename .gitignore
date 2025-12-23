@@ -25,7 +25,8 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
-/media/
+/media/*
 /tmp/
 /uploads/
 /error_excels/
+__init__.py
