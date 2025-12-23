@@ -1,10 +1,17 @@
-from fastapi import APIRouter, Query, Depends
+"""
+Routes for exporting filtered shift data as Excel files.
+"""
+
+
+import io
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-import io
+
 from db import get_db
-from utils.dependencies import get_current_user
 from services.get_excel_service import export_filtered_excel
+from utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/excel", tags=["Excel Data"])
 
@@ -17,8 +24,9 @@ def download_excel(
     start_month: str | None = Query(None),
     end_month: str | None = Query(None),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    _current_user = Depends(get_current_user),
 ):
+    """Download filtered shift data as an Excel file."""
 
     df = export_filtered_excel(
         db=db,
