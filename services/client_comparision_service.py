@@ -1,13 +1,14 @@
+"""Services for client comparison, totals, and department summaries."""
+
 from datetime import datetime, date
 from calendar import monthrange
 from typing import Optional, Dict, Any
-from schemas.dashboardschema import VerticalGraphResponse
 from decimal import Decimal
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from models.models import ShiftAllowances, ShiftMapping, ShiftsAmount
 from dateutil.relativedelta import relativedelta
+from models.models import ShiftAllowances, ShiftMapping, ShiftsAmount
 
 def parse_yyyy_mm(value: str) -> date:
     try:
@@ -26,6 +27,7 @@ def last_day_of_month(d: date) -> date:
     _, last_day = monthrange(d.year, d.month)
     return date(d.year, d.month, last_day)
 
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
 def client_comparison_service(
     db: Session,
     client_name: str,
@@ -33,6 +35,7 @@ def client_comparison_service(
     end_month: Optional[str],
     account_manager: Optional[str] = None,
 ):
+    """Return month-wise and department-wise client allowance comparison."""
     if end_month and not start_month:
         raise HTTPException(
             status_code=400,
@@ -288,10 +291,10 @@ def client_comparison_service(
 
 
 def get_client_total_allowances(db: Session, start_month: str | None, end_month: str | None, top: str | None):
-    
+
 
     if top is None or str(top).strip().lower() == "all":
-        top_int = None  
+        top_int = None
     else:
         if not str(top).isdigit():
             raise HTTPException(status_code=400, detail="top must be a positive integer or 'all'")
@@ -303,7 +306,7 @@ def get_client_total_allowances(db: Session, start_month: str | None, end_month:
         try:
             datetime.strptime(m, "%Y-%m")
             return True
-        except:
+        except ValueError:
             return False
 
     def generate_months(start_m: str, end_m: str):
@@ -398,7 +401,7 @@ def get_client_total_allowances(db: Session, start_month: str | None, end_month:
 
 def get_client_departments_service(db: Session, client: str | None):
 
-    
+
     if client is not None:
         client = client.strip()
 
@@ -420,13 +423,13 @@ def get_client_departments_service(db: Session, client: str | None):
                 detail="Numbers are not allowed, only strings"
             )
 
-  
+
     if client:
         rows = (
             db.query(ShiftAllowances.department)
             .filter(
                 ShiftAllowances.client == client,
-                ShiftAllowances.client.isnot(None)  
+                ShiftAllowances.client.isnot(None)
             )
             .all()
         )
@@ -444,20 +447,20 @@ def get_client_departments_service(db: Session, client: str | None):
             "departments": departments
         }]
 
-   
+
     rows = (
         db.query(
             ShiftAllowances.client,
             ShiftAllowances.department
         )
-        .filter(ShiftAllowances.client.isnot(None))  
+        .filter(ShiftAllowances.client.isnot(None))
         .all()
     )
 
     result = {}
 
     for client_name, dept in rows:
-        
+
         if not client_name:
             continue
 
