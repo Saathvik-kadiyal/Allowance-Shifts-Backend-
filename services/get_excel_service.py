@@ -1,11 +1,12 @@
+"""Service for exporting filtered shift allowance data as a Pandas DataFrame."""
+
+from datetime import datetime, date
 import pandas as pd
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from models.models import ShiftAllowances, ShiftMapping, ShiftsAmount
 from fastapi import HTTPException
-from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
-
+from models.models import ShiftAllowances, ShiftMapping, ShiftsAmount
 
 def export_filtered_excel(
     db: Session,
@@ -16,6 +17,13 @@ def export_filtered_excel(
     department: str | None = None,
     client: str | None = None
 ):
+    """
+    Export filtered shift allowance records as a Pandas DataFrame.
+
+    Supports filtering by employee, account manager, department, client,
+    and duration month range. If no date filter is provided, the latest
+    available month within the last 12 months is used.
+    """
 
     SHIFT_LABELS = {"A": "A", "B": "B", "C": "C", "PRIME": "PRIME"}
 
@@ -40,7 +48,7 @@ def export_filtered_excel(
         )
     )
 
-   
+
     if emp_id:
         base_query = base_query.filter(
             func.trim(ShiftAllowances.emp_id) == emp_id.strip()
@@ -64,13 +72,13 @@ def export_filtered_excel(
             client.strip().lower()
         )
 
- 
+
     today = date.today()
     current_month = today.replace(day=1)
 
     query = None
 
-   
+
     if start_month or end_month:
         if not start_month:
             raise HTTPException(400, "start_month is required when end_month is provided")
@@ -124,7 +132,7 @@ def export_filtered_excel(
     if not rows:
         raise HTTPException(404, "No records found for given filters")
 
-   
+
     shift_amounts = db.query(ShiftsAmount).all()
     ALLOWANCE_MAP = {
         item.shift_type.upper(): float(item.amount or 0)
