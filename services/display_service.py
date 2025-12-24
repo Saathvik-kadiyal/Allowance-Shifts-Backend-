@@ -34,6 +34,7 @@ def _recalculate_all_mappings(db: Session):
 
 
 def fetch_shift_data(db: Session, start: int, limit: int):
+    """Fetch paginated shift records for the latest available duration month."""
     current_month = datetime.now().strftime("%Y-%m")
 
     has_current = (
@@ -71,7 +72,7 @@ def fetch_shift_data(db: Session, start: int, limit: int):
 
     result = []
     for rec in records:
-    
+
         mappings = rec.shift_mappings or []
 
         shift_details = {}
@@ -80,7 +81,7 @@ def fetch_shift_data(db: Session, start: int, limit: int):
         for m in mappings:
             days = float(m.days or 0)
             rate = rates.get(m.shift_type.upper(), 0.0)
-            m.total_allowance = days * rate  
+            m.total_allowance = days * rate
             total_allowance += m.total_allowance
 
             if days > 0:
@@ -110,6 +111,7 @@ def fetch_shift_data(db: Session, start: int, limit: int):
 
 
 def parse_shift_value(value):
+    """Parse and validate shift day input as a non-negative float."""
     if value is None or str(value).strip() == "":
         return 0.0
     raw = str(value).strip()
@@ -136,6 +138,7 @@ def parse_shift_value(value):
 
 
 def validate_half_day(value: float, field_name: str):
+    """Ensure shift values are in 0.5-day increments."""
     if value is None:
         return
 
@@ -153,6 +156,7 @@ def validate_half_day(value: float, field_name: str):
 
 
 def validate_not_future_month(month_date: date, field_name: str):
+    """Raise error if the given month lies in the future."""
     today = date.today().replace(day=1)
     if month_date > today:
         raise HTTPException(
@@ -161,14 +165,6 @@ def validate_not_future_month(month_date: date, field_name: str):
         )
 
 
-def _load_shift_rates(db: Session):
-    from models.models import ShiftsAmount
-
-    rates = {}
-    for r in db.query(ShiftsAmount).all():
-        if r.shift_type:
-            rates[r.shift_type.upper()] = float(r.amount or 0)
-    return rates
 
 
 
@@ -179,6 +175,7 @@ def update_shift_service(
     updates: dict,
     duration_month: Optional[str] = None
 ):
+    """Update shift days for an employee and recalculate allowances."""
     allowed_fields = ["shift_a", "shift_b", "shift_c", "prime"]
     unknown = [k for k in updates if k not in allowed_fields]
     if unknown:
@@ -200,13 +197,13 @@ def update_shift_service(
         "prime": "PRIME"
     }
 
-  
+
     mapped_updates = {
         key_map[k]: (parsed[k] if parsed[k] is not None else 0.0)
         for k in parsed
     }
 
-   
+
 
     try:
         payroll_dt = datetime.strptime(payroll_month, "%Y-%m").date().replace(day=1)
@@ -246,7 +243,7 @@ def update_shift_service(
             detail="Payroll month cannot be earlier than duration month"
         )
 
-   
+
     max_days_in_month = monthrange(duration_dt.year, duration_dt.month)[1]
 
     if sum(mapped_updates.values()) > max_days_in_month:
@@ -336,6 +333,7 @@ def update_shift_service(
 
 
 def fetch_shift_record(emp_id: str, duration_month: str, payroll_month: str, db: Session):
+    """Fetch a single employee shift record with allowance breakdown."""
     try:
         duration_dt = datetime.strptime(duration_month + "-01", "%Y-%m-%d").date()
         payroll_dt = datetime.strptime(payroll_month + "-01", "%Y-%m-%d").date()
@@ -393,7 +391,10 @@ def fetch_shift_record(emp_id: str, duration_month: str, payroll_month: str, db:
 
     return out
 
-def generate_employee_shift_excel(emp_id: str, duration_month: str, payroll_month: str, db: Session): 
+def generate_employee_shift_excel(emp_id: str,
+                                  duration_month: str,
+                                  payroll_month: str, db: Session):
+    """Generate and stream an Excel file for an employee shift record."""
     rec = fetch_shift_record(emp_id, duration_month, payroll_month, db)
 
     if rec.get("duration_month"):
@@ -421,13 +422,13 @@ def generate_employee_shift_excel(emp_id: str, duration_month: str, payroll_mont
     def format_inr(v):
         try:
             formatted = f"₹ {float(v):,.2f}"
-            return formatted.replace("'", "")   
+            return formatted.replace("'", "")
         except:
             return v
 
     df["total_allowance"] = df["total_allowance"].apply(format_inr)
 
-   
+
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Shift Details")
@@ -440,4 +441,3 @@ def generate_employee_shift_excel(emp_id: str, duration_month: str, payroll_mont
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
-
