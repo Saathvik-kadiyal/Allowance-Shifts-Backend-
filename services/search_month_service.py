@@ -1,3 +1,15 @@
+"""
+Shift search service.
+
+This module provides functionality to search employee shift records
+within a given month or month range. It validates input months, prevents
+future-date queries, and returns structured shift data grouped per
+employee per month with human-readable shift labels.
+
+The service is intended for reporting and audit use cases where detailed
+shift breakdowns are required across one or more months.
+"""
+
 from datetime import datetime, date
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -16,6 +28,26 @@ def search_shift_by_month_range(
     start_month: str | None = None,
     end_month: str | None = None
 ):
+    """
+    Search shift records within a given month or month range.
+
+    At least one of start_month or end_month must be provided.
+    The service prevents querying future months and returns shift
+    data enriched with descriptive shift labels.
+
+    Args:
+        db (Session): Active SQLAlchemy database session.
+        start_month (str | None): Start month in YYYY-MM format.
+        end_month (str | None): End month in YYYY-MM format.
+
+    Returns:
+        list[dict]: List of shift records with employee details and
+        labeled shift-day mappings.
+
+    Raises:
+        HTTPException: If input validation fails or no records are found.
+    """
+
     if not start_month and not end_month:
         raise HTTPException(status_code=400, detail="Provide at least one month.")
 
@@ -29,7 +61,8 @@ def search_shift_by_month_range(
     current_month_start = today.replace(day=1)
 
     if end_date and end_date > current_month_start:
-        raise HTTPException(status_code=400, detail=f"end_month cannot be greater than {today.strftime('%Y-%m')}")
+        raise HTTPException(status_code=400,
+                            detail=f"end_month cannot be greater than {today.strftime('%Y-%m')}")
 
     if start_date:
         start_date = start_date.replace(day=1)
@@ -55,7 +88,8 @@ def search_shift_by_month_range(
             func.date_trunc("month", ShiftAllowances.duration_month) <= end_date
         )
     elif start_date:
-        query = query.filter(func.date_trunc("month", ShiftAllowances.duration_month) == start_date)
+        query = query.filter(
+            func.date_trunc("month", ShiftAllowances.duration_month) == start_date)
     elif end_date:
         query = query.filter(func.date_trunc("month", ShiftAllowances.duration_month) == end_date)
 
@@ -67,12 +101,12 @@ def search_shift_by_month_range(
     final_data = []
     for row in rows:
         base = row._asdict()
-        shiftallowance_id = base.pop("id")  
+        shiftallowance_id = base.pop("id")
 
-        
+
         base.pop("project_code", None)
 
-        
+
         base["duration_month"] = row.duration_month.strftime("%Y-%m")
         base["payroll_month"] = row.payroll_month.strftime("%Y-%m")
 
