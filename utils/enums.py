@@ -1,6 +1,17 @@
+"""
+Excel column to database field mapping enums.
+
+This module defines a mapping between Excel column headers and
+database field names. Enum member names intentionally match
+database column names and therefore do not follow UPPER_CASE
+constant naming conventions.
+"""
+
+# pylint: disable=invalid-name
 from enum import Enum
 
 class ExcelColumnMap(Enum):
+    """Excel to db enums"""
     emp_id = "Emp ID"
     emp_name = "Emp Name"
     grade = "Grade"
