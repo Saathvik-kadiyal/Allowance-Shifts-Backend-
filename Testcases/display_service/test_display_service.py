@@ -63,45 +63,52 @@ def test_update_shift_record_not_found(client: TestClient):
 
 # /display/client-enum API TESTCASES
 
-
 def test_client_enum_authenticated_returns_all_companies():
-   
-    client.app.dependency_overrides[get_current_user] = lambda: {"username": "testuser"}
+    client.app.dependency_overrides[get_current_user] = lambda: {
+        "username": "testuser"
+    }
 
     resp = client.get(CLIENT_ENUM_URL)
     assert resp.status_code == 200
 
-    expected = {company.value: company.name.replace("_", " ") for company in Company}
-    assert resp.json() == expected
+    data = resp.json()
+
+    for company in Company:
+        assert company.value in data
+        assert data[company.value]["value"] == company.name.replace("_", " ")
+        assert data[company.value]["hexcode"].startswith("#")
 
     client.app.dependency_overrides = {}
 
 
 def test_client_enum_response_contains_all_enum_values():
-
-    client.app.dependency_overrides[get_current_user] = lambda: {"username": "testuser"}
+    client.app.dependency_overrides[get_current_user] = lambda: {
+        "username": "testuser"
+    }
 
     resp = client.get(CLIENT_ENUM_URL)
-    
     assert resp.status_code == 200
 
     data = resp.json()
+    assert len(data) == len(Company)
+
     for company in Company:
-        assert company.value in data
-        assert data[company.value] == company.name.replace("_", " ")
+        entry = data[company.value]
+        assert set(entry.keys()) == {"value", "hexcode"}
 
     client.app.dependency_overrides = {}
 
 
 def test_client_enum_unauthenticated_user():
     resp = client.get(CLIENT_ENUM_URL)
-    assert resp.status_code in (401, 403)
+    assert resp.status_code == 403
 
 
 def test_client_enum_dependency_failure():
-
-    client.app.dependency_overrides[get_current_user] = lambda: (_ for _ in ()).throw(
-        HTTPException(status_code=401, detail="Auth failed")
+    client.app.dependency_overrides[get_current_user] = lambda: (
+        (_ for _ in ()).throw(
+            HTTPException(status_code=401, detail="Auth failed")
+        )
     )
 
     resp = client.get(CLIENT_ENUM_URL)
