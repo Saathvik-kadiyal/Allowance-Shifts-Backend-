@@ -1,13 +1,22 @@
+"""
+Database ORM models.
+
+This module defines SQLAlchemy ORM models for users, uploaded files,
+shift allowances, shift mappings, and shift amount configurations.
+"""
+
+# pylint: disable=too-few-public-methods,not-callable
 from sqlalchemy import (
-    Column, Integer, String, Text, TIMESTAMP, Numeric, func, ForeignKey,UniqueConstraint,Date,CheckConstraint,Float
+    Column, Integer, String, Text, TIMESTAMP, Numeric, func,
+    ForeignKey,UniqueConstraint,Date,CheckConstraint,Float
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from db import Base
 
 
 # USERS TABLE
 class Users(Base):
+    """User accounts table."""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -23,6 +32,7 @@ class Users(Base):
 
 # UPLOADED FILES TABLE
 class UploadedFiles(Base):
+    """Metadata for uploaded payroll Excel files."""
     __tablename__ = "uploaded_files"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -31,13 +41,14 @@ class UploadedFiles(Base):
     uploaded_at = Column(TIMESTAMP, server_default=func.now())
     record_count = Column(Integer, default=0)
     status = Column(String(20), default="processed")
-    payroll_month = Column(Date, nullable=True) 
+    payroll_month = Column(Date, nullable=True)
 
     uploader = relationship("Users", back_populates="uploaded_files")
 
 
 # SHIFT ALLOWANCES TABLE
 class ShiftAllowances(Base):
+    """Employee shift allowance master table."""
     __tablename__ = "shift_allowances"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -70,6 +81,7 @@ class ShiftAllowances(Base):
 
 
 class ShiftsAmount(Base):
+    """Shift type to allowance amount mapping per payroll year."""
     __tablename__ = "shifts_amount"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -82,6 +94,7 @@ class ShiftsAmount(Base):
 
 # SHIFT MAPPING TABLE
 class ShiftMapping(Base):
+    """Employee shift-day mapping with calculated allowance."""
     __tablename__ = "shift_mapping"
 
     id = Column(Integer, primary_key=True, index=True)
