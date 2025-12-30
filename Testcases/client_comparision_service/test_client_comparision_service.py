@@ -1,3 +1,11 @@
+"""
+Client-departments API test cases.
+
+This module contains integration tests for the `/client-departments`
+endpoint, validating retrieval of departments grouped by client,
+including filtering, validation, and error handling.
+"""
+
 from fastapi.testclient import TestClient
 from models.models import ShiftAllowances
 
@@ -5,9 +13,17 @@ from models.models import ShiftAllowances
 CLIENT_DEPTS_URL = "/client-departments"
 
 
-# HELPER FUNCTION 
+# HELPER FUNCTION
 
 def add_row(db, client, dept):
+    """
+    Helper function to insert a ShiftAllowances row into the database.
+
+    Args:
+        db: Database session fixture.
+        client: Client name.
+        dept: Department name.
+    """
     db.add(
         ShiftAllowances(
             emp_id="E01",
@@ -21,6 +37,10 @@ def add_row(db, client, dept):
 # /client-departments API TESTCASES
 
 def test_get_all_clients_departments(client: TestClient, db_session):
+    """
+    Verify that all clients and their departments are returned
+    when no client filter is applied.
+    """
     add_row(db_session, "ClientA", "IT")
     add_row(db_session, "ClientB", "HR")
 
@@ -32,6 +52,10 @@ def test_get_all_clients_departments(client: TestClient, db_session):
 
 
 def test_get_specific_client_departments(client: TestClient, db_session):
+    """
+    Verify that departments are correctly grouped and returned
+    for a specific client.
+    """
     add_row(db_session, "ClientA", "IT")
     add_row(db_session, "ClientA", "HR")
 
@@ -44,6 +68,9 @@ def test_get_specific_client_departments(client: TestClient, db_session):
 
 
 def test_get_client_departments_invalid_input(client: TestClient, db_session):
+    """
+    Verify API returns a 400 error when client parameter is empty or invalid.
+    """
     add_row(db_session, "ClientA", "IT")
 
     resp = client.get(CLIENT_DEPTS_URL, params={"client": "   "})
@@ -53,6 +80,9 @@ def test_get_client_departments_invalid_input(client: TestClient, db_session):
 
 
 def test_get_client_departments_not_found(client: TestClient, db_session):
+    """
+    Verify API returns a 404 error when the specified client does not exist.
+    """
     add_row(db_session, "ClientA", "IT")
 
     resp = client.get(CLIENT_DEPTS_URL, params={"client": "Unknown"})
