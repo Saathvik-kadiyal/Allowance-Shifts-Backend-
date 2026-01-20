@@ -108,6 +108,7 @@ def correct_error_rows(
     Raises:
         HTTPException: If validation or update fails.
     """
+    print(payload.corrected_rows)
     return update_corrected_rows(
         db=db,
         corrected_rows=payload.corrected_rows

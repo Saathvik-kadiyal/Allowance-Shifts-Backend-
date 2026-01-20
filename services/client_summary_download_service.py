@@ -1,111 +1,138 @@
-"""Service for exporting client summary data as an Excel file."""
-
+"""
+Service for exporting client summary data as an Excel file.
+"""
+ 
 import os
 from datetime import date
-from typing import List, Dict
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, extract
 import pandas as pd
-from services.client_summary_service import client_summary_service
-from models.models import ShiftAllowances, ShiftMapping, ShiftsAmount
-
-
-# ---------------- HELPERS ----------------
-
-def validate_year(year: int):
-    """Validate that the selected year is not invalid or in the future."""
-    current_year = date.today().year
-    if year <= 0:
-        raise HTTPException(400, "selected_year must be greater than 0")
-    if year > current_year:
-        raise HTTPException(400, "selected_year cannot be in the future")
-
-
-def quarter_to_months(q: str) -> List[int]:
-    """Convert quarter string (Q1–Q4) into a list of month numbers."""
-    mapping = {
-        "Q1": [1, 2, 3],
-        "Q2": [4, 5, 6],
-        "Q3": [7, 8, 9],
-        "Q4": [10, 11, 12],
-    }
-    q = q.upper().strip()
-    if q not in mapping:
-        raise HTTPException(400, "Invalid quarter (Q1–Q4 expected)")
-    return mapping[q]
-
-
-def month_range(start: str, end: str) -> Dict[int, List[int]]:
-    """Generate a year-to-months mapping between two YYYY-MM values."""
-    sy, sm = map(int, start.split("-"))
-    ey, em = map(int, end.split("-"))
-
-    if (sy, sm) > (ey, em):
-        raise HTTPException(400, "start_month cannot be greater than end_month")
-
-    months = []
-    y, m = sy, sm
-    while (y, m) <= (ey, em):
-        months.append((y, m))
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
-
-    result = {}
-    for y, m in months:
-        result.setdefault(y, []).append(m)
-
-    return result
-
-
-# ---------------- MAIN SERVICE ----------------
-
+from diskcache import Cache
+ 
+from services.client_summary_service import (
+    client_summary_service,
+    is_default_latest_month_request,
+    LATEST_MONTH_KEY,
+    CACHE_TTL,
+)
+ 
+ 
+cache = Cache("./diskcache/latest_month")
+ 
+EXPORT_DIR = "exports"
+DEFAULT_EXPORT_FILE = "client_summary_latest.xlsx"
+ 
+ 
 def client_summary_download_service(db: Session, payload: dict) -> str:
     """
-    Generate and export client summary Excel
-    using client_summary_service output.
+    Generate and export client summary Excel.
+ 
+    - Column "Client Partner" comes from account_manager in DB.
+    - Employee-level shifts included if present.
+    - Fallback to department totals if employee shift data missing.
+    - Zero departments are preserved.
+    - Uses cache ONLY for default latest-month request.
     """
-
-    # ✅ Reuse existing logic (cache included)
+ 
+    payload = payload or {}
+ 
+    if is_default_latest_month_request(payload):
+        cached = cache.get(f"{LATEST_MONTH_KEY}:excel")
+        if cached and os.path.exists(cached["file_path"]):
+            return cached["file_path"]
+ 
+    emp_filter = payload.get("emp_id")
+    manager_filter = payload.get("account_manager")
+ 
     summary_data = client_summary_service(db, payload)
-
     if not summary_data:
         raise HTTPException(404, "No data available")
-
+ 
     rows = []
-
-    for period_key, period_data in summary_data.items():
+ 
+    sorted_periods = sorted(summary_data.keys())
+ 
+    for period_key in sorted_periods:
+        period_data = summary_data[period_key]
         if "clients" not in period_data:
             continue
-
+ 
         for client_name, client_block in period_data["clients"].items():
-            for dept_name, dept_block in client_block["departments"].items():
-                for emp in dept_block.get("employees", []):
+            client_partner_value = client_block.get("account_manager", "")
+            departments = client_block.get("departments", {})
+ 
+            for dept_name, dept_block in departments.items():
+                employees = dept_block.get("employees", [])
+ 
+                if not employees:
+                    if manager_filter and manager_filter != client_partner_value:
+                        continue
+ 
                     rows.append({
                         "Period": period_key,
                         "Client": client_name,
+                        "Client Partner": client_partner_value,
+                        "Employee ID": "",
                         "Department": dept_name,
-                        "Employee ID": emp.get("emp_id"),
-                        "Employee Name": emp.get("emp_name"),
-                        "Account Manager": emp.get("account_manager"),
-                        "Shift A": emp.get("A", 0),
-                        "Shift B": emp.get("B", 0),
-                        "Shift C": emp.get("C", 0),
-                        "Prime": emp.get("PRIME", 0),
-                        "Total Allowance": emp.get("total", 0),
+                        "Head Count": dept_block.get("dept_head_count", 0),
+                        "Shift A": f"₹{dept_block.get('dept_A', 0):,}",
+                        "Shift B": f"₹{dept_block.get('dept_B', 0):,}",
+                        "Shift C": f"₹{dept_block.get('dept_C', 0):,}",
+                        "Shift PRIME": f"₹{dept_block.get('dept_PRIME', 0):,}",
+                        "Total Allowance": f"₹{dept_block.get('dept_total', 0):,}",
                     })
-
+                else:
+                    for emp in employees:
+                        if emp_filter and emp_filter != emp.get("emp_id"):
+                            continue
+                        if manager_filter and manager_filter != emp.get("account_manager", client_partner_value):
+                            continue
+ 
+                        rows.append({
+                            "Period": period_key,
+                            "Client": client_name,
+                            "Client Partner": emp.get("account_manager", client_partner_value),
+                            "Employee ID": emp.get("emp_id", ""),
+                            "Department": dept_name,
+                            "Head Count": 1,
+                            "Shift A": f"₹{emp.get('shift_A', dept_block.get('dept_A', 0)):,}",
+                            "Shift B": f"₹{emp.get('shift_B', dept_block.get('dept_B', 0)):,}",
+                            "Shift C": f"₹{emp.get('shift_C', dept_block.get('dept_C', 0)):,}",
+                            "Shift PRIME": f"₹{emp.get('shift_PRIME', dept_block.get('dept_PRIME', 0)):,}",
+                            "Total Allowance": f"₹{emp.get('total_allowance', dept_block.get('dept_total', 0)):,}",
+                        })
+ 
     if not rows:
         raise HTTPException(404, "No data available for export")
-
+ 
     df = pd.DataFrame(rows)
-
-    os.makedirs("exports", exist_ok=True)
-    file_path = "exports/client_summary.xlsx"
-
+    df["Period"] = pd.to_datetime(df["Period"], format="%Y-%m")
+    df = df.sort_values(by=["Period", "Client", "Department", "Employee ID"])
+    df["Period"] = df["Period"].dt.strftime("%Y-%m")
+ 
+    os.makedirs(EXPORT_DIR, exist_ok=True)
+ 
+    if is_default_latest_month_request(payload):
+        file_path = os.path.join(EXPORT_DIR, DEFAULT_EXPORT_FILE)
+    else:
+        file_path = os.path.join(
+            EXPORT_DIR,
+            f"client_summary_{date.today():%Y%m%d_%H%M%S}.xlsx",
+        )
+ 
     with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Client Summary")
-
+ 
+    if is_default_latest_month_request(payload):
+        cache.set(
+            f"{LATEST_MONTH_KEY}:excel",
+            {
+                "_cached_month": df["Period"].iloc[0],
+                "file_path": file_path,
+            },
+            expire=CACHE_TTL,
+        )
+ 
     return file_path
+ 
+ 

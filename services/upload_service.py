@@ -8,7 +8,7 @@ import re
 import calendar
 from datetime import datetime, date
 from typing import List
-
+import json
 import pandas as pd
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -358,42 +358,79 @@ def days_in_month(month_date: date) -> int:
     return calendar.monthrange(month_date.year, month_date.month)[1]
 
 
-def update_corrected_rows(db: Session, corrected_rows: List[CorrectedRow]):
+ 
+def update_corrected_rows(db: Session, corrected_rows: List["CorrectedRow"]):
     if not corrected_rows:
         raise HTTPException(400, "No corrected rows provided")
-
+ 
     shift_rates = load_shift_rates(db)
     failed_rows = []
-
+ 
     for row in corrected_rows:
         try:
             duration_month = parse_yyyy_mm(row.duration_month)
             payroll_month = parse_yyyy_mm(row.payroll_month)
-
+ 
+            total_shift_days = validate_shift_days(row)
+            if total_shift_days > days_in_month(duration_month):
+                raise HTTPException(
+                    400,
+                    "Total shift days exceed number of days in duration month"
+                )
+ 
+         
             sa = (
                 db.query(ShiftAllowances)
                 .filter(
                     ShiftAllowances.emp_id == row.emp_id,
+                    ShiftAllowances.client == row.client,
                     ShiftAllowances.duration_month == duration_month,
                     ShiftAllowances.payroll_month == payroll_month,
                 )
                 .first()
             )
-
+ 
             if not sa:
                 sa = ShiftAllowances(
                     emp_id=row.emp_id,
+                    client=row.client,
                     duration_month=duration_month,
                     payroll_month=payroll_month,
-                    project=row.project,
                 )
                 db.add(sa)
                 db.flush()
-            else:
-                db.query(ShiftMapping).filter(
-                    ShiftMapping.shiftallowance_id == sa.id
-                ).delete()
-
+ 
+            sa.emp_name = row.emp_name
+            sa.grade = row.grade
+            sa.current_status = row.current_status
+            sa.department = row.department
+            sa.project = row.project
+            sa.project_code = row.project_code
+            sa.account_manager = row.account_manager
+            sa.practice_lead = row.practice_lead
+            sa.delivery_manager = row.delivery_manager
+            sa.shift_types = row.shift_types
+            sa.total_days = row.total_days
+            sa.timesheet_billable_days = row.timesheet_billable_days
+            sa.timesheet_non_billable_days = row.timesheet_non_billable_days
+            sa.diff = row.diff
+            sa.final_total_days = row.final_total_days
+            sa.billability_status = row.billability_status
+            sa.practice_remarks = row.practice_remarks
+            sa.rmg_comments = row.rmg_comments
+            sa.amar_approval = row.amar_approval
+            sa.shift_a_allowances = row.shift_a_allowances
+            sa.shift_b_allowances = row.shift_b_allowances
+            sa.shift_c_allowances = row.shift_c_allowances
+            sa.prime_allowances = row.prime_allowances
+            sa.total_days_allowances = row.total_days_allowances
+            sa.am_email_attempt = row.am_email_attempt
+            sa.am_approval_status = row.am_approval_status
+ 
+            db.query(ShiftMapping).filter(
+                ShiftMapping.shiftallowance_id == sa.id
+            ).delete()
+ 
             for shift, days in {
                 "A": row.shift_a_days,
                 "B": row.shift_b_days,
@@ -410,25 +447,32 @@ def update_corrected_rows(db: Session, corrected_rows: List[CorrectedRow]):
                             total_allowance=float(days) * rate,
                         )
                     )
-
+ 
+            db.commit()
+ 
         except Exception as e:
             db.rollback()
+            reason = e.detail if isinstance(e, HTTPException) else str(e)
             failed_rows.append({
                 "emp_id": row.emp_id,
+                "client": row.client,
                 "duration_month": row.duration_month,
-                "project": row.project,
-                "reason": str(e),
+                "payroll_month": row.payroll_month,
+                "reason": reason,
             })
-
+ 
     if failed_rows:
-        raise HTTPException(400, {
-            "message": "Validation failed",
-            "failed_rows": failed_rows
-        })
-
-    db.commit()
-
+        raise HTTPException(
+            400,
+            json.dumps({
+                "message": "Validation failed",
+                "failed_rows": failed_rows
+            }, default=str)
+        )
+ 
     return {
         "message": "Rows inserted/updated successfully",
         "records_processed": len(corrected_rows)
     }
+ 
+ 

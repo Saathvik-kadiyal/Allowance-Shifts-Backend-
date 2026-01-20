@@ -157,32 +157,61 @@ class ClientDeptResponse(BaseModel):
         from_attributes = True
 
 
+ 
 class CorrectedRow(BaseModel):
-    """
-    Represents a corrected employee row from Excel upload.
-    """
-
     emp_id: str
-    project:str
-    duration_month: Optional[str] = Field(
-    None,
-    description="Format: Mon'YY (e.g. Jan'25)"
-)
-
-    payroll_month: Optional[str] = Field(
-    None,
-    description="Format: Mon'YY (e.g. Jan'25)"
-)
-
-
+    emp_name: Optional[str] = None
+    grade: Optional[str] = None
+    current_status: Optional[str] = Field(None, alias="Current Status(e)")
+    department: Optional[str] = None
+    client: Optional[str] = None
+    project: str
+    project_code: Optional[str] = None
+    account_manager: Optional[str] = None
+    practice_lead: Optional[str] = None
+    delivery_manager: Optional[Union[int, str]] = None
+ 
+    duration_month: Optional[str] = None
+    payroll_month: Optional[str] = None
+ 
     shift_a_days: Optional[Union[int, float]] = 0
     shift_b_days: Optional[Union[int, float]] = 0
     shift_c_days: Optional[Union[int, float]] = 0
     prime_days: Optional[Union[int, float]] = 0
-
+ 
+    shift_types: Optional[Union[int, str]] = None
+    total_days: Optional[Union[int, float]] = 0
+    timesheet_billable_days: Optional[Union[int, float]] = None
+    timesheet_non_billable_days: Optional[Union[int, float]] = None
+    diff: Optional[Union[int, float]] = None
+    final_total_days: Optional[Union[int, float]] = None
+ 
+    billability_status: Optional[str] = None
+    practice_remarks: Optional[Union[int, str]] = None
+    rmg_comments: Optional[Union[int, str]] = None
+    amar_approval: Optional[Union[int, str]] = None
+ 
+    shift_a_allowances: Optional[Union[int, float]] = None
+    shift_b_allowances: Optional[Union[int, float]] = None
+    shift_c_allowances: Optional[Union[int, float]] = None
+    prime_allowances: Optional[Union[int, float]] = None
+    total_days_allowances: Optional[Union[int, float]] = None
+ 
+    am_email_attempt: Optional[Union[int, str]] = None
+    am_approval_status: Optional[Union[int, str]] = None
+ 
+    class Config:
+        populate_by_name = True
+        extra = "ignore"
+ 
+ 
+class CorrectedRowsRequest(BaseModel):
+    corrected_rows: List[CorrectedRow]
+ 
     class Config:
         extra = "ignore"
-
+ 
+ 
 
 class CorrectedRowsRequest(BaseModel):
     """
